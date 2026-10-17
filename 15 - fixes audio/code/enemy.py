@@ -35,7 +35,8 @@ class Enemy(Entity):
 		# player interaction
 		self.can_attack = True
 		self.attack_time = None
-		self.attack_cooldown = 400
+		self.attack_cooldown = 500
+		self.has_attacked = False
 		self.damage_player = damage_player
 		self.trigger_death_particles = trigger_death_particles
 		self.add_exp = add_exp
@@ -71,23 +72,39 @@ class Enemy(Entity):
 
 		return (distance,direction)
 
+	def attack_hit_frame(self):
+		length = len(self.animations['attack'])
+		if length <= 1:
+			return 0
+		return max(1, length // 2)
+
 	def get_status(self, player):
 		distance = self.get_player_distance_direction(player)[0]
+		was_attacking = self.status == 'attack'
 
 		if distance <= self.attack_radius and self.can_attack:
 			if self.status != 'attack':
 				self.frame_index = 0
+				self.has_attacked = False
 			self.status = 'attack'
 		elif distance <= self.notice_radius:
 			self.status = 'move'
 		else:
 			self.status = 'idle'
 
+		# Leaving a swing early still spends the attack, so it cannot hit again immediately.
+		if was_attacking and self.status != 'attack' and self.can_attack:
+			self.can_attack = False
+			self.attack_time = pygame.time.get_ticks()
+			self.has_attacked = False
+
 	def actions(self,player):
 		if self.status == 'attack':
-			self.attack_time = pygame.time.get_ticks()
-			self.damage_player(self.attack_damage,self.attack_type)
-			self.attack_sound.play()
+			self.direction = pygame.math.Vector2()
+			if not self.has_attacked and int(self.frame_index) >= self.attack_hit_frame():
+				self.has_attacked = True
+				self.attack_sound.play()
+				self.damage_player(self.attack_damage,self.attack_type,self)
 		elif self.status == 'move':
 			self.direction = self.get_player_distance_direction(player)[1]
 		else:
@@ -100,6 +117,8 @@ class Enemy(Entity):
 		if self.frame_index >= len(animation):
 			if self.status == 'attack':
 				self.can_attack = False
+				self.attack_time = pygame.time.get_ticks()
+				self.has_attacked = False
 			self.frame_index = 0
 
 		self.image = animation[int(self.frame_index)]
@@ -122,15 +141,19 @@ class Enemy(Entity):
 				self.vulnerable = True
 
 	def get_damage(self,player,attack_type):
-		if self.vulnerable:
-			self.hit_sound.play()
-			self.direction = self.get_player_distance_direction(player)[1]
-			if attack_type == 'weapon':
-				self.health -= player.get_full_weapon_damage()
-			else:
-				self.health -= player.get_full_magic_damage()
-			self.hit_time = pygame.time.get_ticks()
-			self.vulnerable = False
+		if not self.vulnerable:
+			return 0
+
+		self.hit_sound.play()
+		self.direction = self.get_player_distance_direction(player)[1]
+		if attack_type == 'weapon':
+			damage = player.get_full_weapon_damage()
+		else:
+			damage = player.get_full_magic_damage()
+		self.health -= damage
+		self.hit_time = pygame.time.get_ticks()
+		self.vulnerable = False
+		return damage
 
 	def check_death(self):
 		if self.health <= 0:
@@ -151,5 +174,8 @@ class Enemy(Entity):
 		self.check_death()
 
 	def enemy_update(self,player):
+		if not getattr(player,'alive',True):
+			self.direction = pygame.math.Vector2()
+			return
 		self.get_status(player)
 		self.actions(player)

@@ -11,6 +11,8 @@ class MagicPlayer:
 		}
 
 	def heal(self,player,strength,cost,groups):
+		if not player.alive:
+			return
 		if player.energy >= cost:
 			self.sounds['heal'].play()
 			player.health += strength
@@ -21,6 +23,8 @@ class MagicPlayer:
 			self.animation_player.create_particles('heal',player.rect.center,groups)
 
 	def flame(self,player,cost,groups):
+		if not player.alive:
+			return
 		if player.energy >= cost:
 			player.energy -= cost
 			self.sounds['flame'].play()

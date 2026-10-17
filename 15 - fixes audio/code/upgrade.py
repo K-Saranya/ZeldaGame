@@ -117,11 +117,14 @@ class Item:
 
 		if player.exp >= player.upgrade_cost[upgrade_attribute] and player.stats[upgrade_attribute] < player.max_stats[upgrade_attribute]:
 			player.exp -= player.upgrade_cost[upgrade_attribute]
-			player.stats[upgrade_attribute] *= 1.2
+			previous = player.stats[upgrade_attribute]
+			player.stats[upgrade_attribute] = min(player.max_stats[upgrade_attribute], previous * 1.2)
 			player.upgrade_cost[upgrade_attribute] *= 1.4
-
-		if player.stats[upgrade_attribute] > player.max_stats[upgrade_attribute]:
-			player.stats[upgrade_attribute] = player.max_stats[upgrade_attribute]
+			gained = player.stats[upgrade_attribute] - previous
+			if upgrade_attribute == 'health':
+				player.health = min(player.stats['health'], player.health + gained)
+			elif upgrade_attribute == 'energy':
+				player.energy = min(player.stats['energy'], player.energy + gained)
 
 	def display(self,surface,selection_num,name,value,max_value,cost):
 		if self.index == selection_num:

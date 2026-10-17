@@ -6,13 +6,12 @@ from entity import Entity
 class Player(Entity):
 	def __init__(self,pos,groups,obstacle_sprites,create_attack,destroy_attack,create_magic):
 		super().__init__(groups)
-		self.image = pygame.image.load('../graphics/test/player.png').convert_alpha()
-		self.rect = self.image.get_rect(topleft = pos)
-		self.hitbox = self.rect.inflate(-6,HITBOX_OFFSET['player'])
-
-		# graphics setup
 		self.import_player_assets()
 		self.status = 'down'
+		self.image = self.animations['down_idle'][0]
+		self.rect = self.image.get_rect(topleft = pos)
+		self.hitbox = self.rect.inflate(-6,HITBOX_OFFSET['player'])
+		self.alive = True
 
 		# movement 
 		self.attacking = False
@@ -40,15 +39,15 @@ class Player(Entity):
 		self.stats = {'health': 100,'energy':60,'attack': 10,'magic': 4,'speed': 5}
 		self.max_stats = {'health': 300, 'energy': 140, 'attack': 20, 'magic' : 10, 'speed': 10}
 		self.upgrade_cost = {'health': 100, 'energy': 100, 'attack': 100, 'magic' : 100, 'speed': 100}
-		self.health = self.stats['health'] * 0.5
-		self.energy = self.stats['energy'] * 0.8
-		self.exp = 5000
+		self.health = self.stats['health']
+		self.energy = self.stats['energy']
+		self.exp = 0
 		self.speed = self.stats['speed']
 
 		# damage timer
 		self.vulnerable = True
 		self.hurt_time = None
-		self.invulnerability_duration = 500
+		self.invulnerability_duration = 650
 
 		# import a sound
 		self.weapon_attack_sound = pygame.mixer.Sound('../audio/sword.wav')
@@ -69,19 +68,24 @@ class Player(Entity):
 			keys = pygame.key.get_pressed()
 
 			# movement input
-			if keys[pygame.K_UP]:
+			up = keys[pygame.K_UP] or keys[pygame.K_w]
+			down = keys[pygame.K_DOWN] or keys[pygame.K_s]
+			left = keys[pygame.K_LEFT] or keys[pygame.K_a]
+			right = keys[pygame.K_RIGHT] or keys[pygame.K_d]
+
+			if up and not down:
 				self.direction.y = -1
 				self.status = 'up'
-			elif keys[pygame.K_DOWN]:
+			elif down and not up:
 				self.direction.y = 1
 				self.status = 'down'
 			else:
 				self.direction.y = 0
 
-			if keys[pygame.K_RIGHT]:
+			if right and not left:
 				self.direction.x = 1
 				self.status = 'right'
-			elif keys[pygame.K_LEFT]:
+			elif left and not right:
 				self.direction.x = -1
 				self.status = 'left'
 			else:
@@ -95,7 +99,7 @@ class Player(Entity):
 				self.weapon_attack_sound.play()
 
 			# magic input 
-			if keys[pygame.K_LCTRL]:
+			if keys[pygame.K_LCTRL] or keys[pygame.K_RCTRL]:
 				self.attacking = True
 				self.attack_time = pygame.time.get_ticks()
 				style = list(magic_data.keys())[self.magic_index]
@@ -199,6 +203,23 @@ class Player(Entity):
 	def get_cost_by_index(self,index):
 		return list(self.upgrade_cost.values())[index]
 
+	def apply_damage(self,amount):
+		if not self.alive or not self.vulnerable or amount <= 0:
+			return False
+
+		self.health -= amount
+		self.vulnerable = False
+		self.hurt_time = pygame.time.get_ticks()
+
+		if self.health <= 0:
+			self.health = 0
+			self.alive = False
+			self.vulnerable = False
+			self.attacking = False
+			self.direction.update(0,0)
+			return 'dead'
+		return True
+
 	def energy_recovery(self):
 		if self.energy < self.stats['energy']:
 			self.energy += 0.01 * self.stats['magic']
@@ -206,6 +227,8 @@ class Player(Entity):
 			self.energy = self.stats['energy']
 
 	def update(self):
+		if not self.alive:
+			return
 		self.input()
 		self.cooldowns()
 		self.get_status()
